@@ -1,0 +1,147 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define MAX 500
+#define LIMIT_AMOUNT 50000
+#define MAX_WITHDRAW 3
+
+// structure for each transaction
+typedef struct {
+    char date[20];
+    char time[20];
+    int accNo;
+    char type[20];
+    float amount;
+} Transaction;
+
+// function prototypes
+void loadTransactions(Transaction t[], int *n);
+void analyzeTransactions(Transaction t[], int n);
+void saveSuspicious(Transaction t[], int n);
+int isTimeClose(char *t1, char *t2);
+
+int main() {
+    Transaction t[MAX];
+    int n = 0;
+
+    printf("\n--- BANKING TRANSACTION LOG ANALYZER ---\n");
+
+    loadTransactions(t, &n);
+    analyzeTransactions(t, n);
+    saveSuspicious(t, n);
+
+    return 0;
+}
+
+// Read data from log file
+void loadTransactions(Transaction t[], int *n) {
+    FILE *fp = fopen("log.txt", "r");
+
+    if (fp == NULL) {
+        printf("Error: Cannot open log.txt\n");
+        exit(1);
+    }
+
+    *n = 0;
+    while (fscanf(fp, "%s %s %d %s %f",
+                  t[*n].date,
+                  t[*n].time,
+                  &t[*n].accNo,
+                  t[*n].type,
+                  &t[*n].amount) != EOF) 
+    {
+        (*n)++;
+    }
+
+    fclose(fp);
+
+    printf("\nLoaded %d transactions.\n", *n);
+}
+
+// Analyze and print suspicious info
+void analyzeTransactions(Transaction t[], int n) {
+    printf("\n--- SUSPICIOUS TRANSACTION REPORT ---\n");
+
+    int withdrawCount[MAX] = {0};
+
+    for (int i = 0; i < n; i++) {
+        int suspicious = 0;
+
+        // 1. Huge amount
+        if (t[i].amount > LIMIT_AMOUNT) {
+            suspicious = 1;
+            printf("\n[ALERT] High Amount Transaction!\n");
+        }
+
+        // 2. Count withdrawals per account
+        if (strcmp(t[i].type, "WITHDRAW") == 0) {
+            withdrawCount[t[i].accNo]++;
+            if (withdrawCount[t[i].accNo] > MAX_WITHDRAW) {
+                suspicious = 1;
+                printf("\n[ALERT] Too Many Withdrawals!\n");
+            }
+        }
+
+        // 3. Negative balance check (simple simulated rule)
+        if (strcmp(t[i].type, "WITHDRAW") == 0 && t[i].amount > 100000) {
+            suspicious = 1;
+            printf("\n[ALERT] Possible Negative Balance!\n");
+        }
+
+        // 4. Multiple transactions in short time (simple time compare)
+        if (i > 0 && t[i].accNo == t[i - 1].accNo &&
+            isTimeClose(t[i].time, t[i - 1].time)) 
+        {
+            suspicious = 1;
+            printf("\n[ALERT] Multiple Fast Transactions!\n");
+        }
+
+        if (suspicious) {
+            printf("Date: %s\n", t[i].date);
+            printf("Time: %s\n", t[i].time);
+            printf("Account No: %d\n", t[i].accNo);
+            printf("Type: %s\n", t[i].type);
+            printf("Amount: %.2f\n", t[i].amount);
+            printf("------------------------------------\n");
+        }
+    }
+}
+
+// Save suspicious to a separate file
+void saveSuspicious(Transaction t[], int n) {
+    FILE *fp = fopen("suspicious.txt", "w");
+
+    if (fp == NULL) {
+        printf("Error: Cannot create suspicious.txt\n");
+        return;
+    }
+
+    for (int i = 0; i < n; i++) {
+        if (t[i].amount > LIMIT_AMOUNT) {
+            fprintf(fp, "%s %s %d %s %.2f\n",
+                    t[i].date,
+                    t[i].time,
+                    t[i].accNo,
+                    t[i].type,
+                    t[i].amount);
+        }
+    }
+
+    fclose(fp);
+    printf("\nSuspicious transactions saved to suspicious.txt\n");
+}
+
+// Compare if two times are within 5 minutes (simple method)
+int isTimeClose(char *t1, char *t2) {
+    int h1, m1, s1;
+    int h2, m2, s2;
+
+    sscanf(t1, "%d:%d:%d", &h1, &m1, &s1);
+    sscanf(t2, "%d:%d:%d", &h2, &m2, &s2);
+
+    int total1 = h1 * 3600 + m1 * 60 + s1;
+    int total2 = h2 * 3600 + m2 * 60 + s2;
+
+    return abs(total1 - total2) <= 300; // 5 minutes
+}
